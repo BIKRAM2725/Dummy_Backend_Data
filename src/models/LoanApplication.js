@@ -1,5 +1,30 @@
 import mongoose from "mongoose";
 
+const documentSchema = new mongoose.Schema(
+    {
+        url: {
+            type: String,
+            required: true
+        },
+
+        publicId: {
+            type: String,
+            required: true
+        },
+
+        originalName: {
+            type: String,
+            required: true
+        },
+
+        uploadedAt: {
+            type: Date,
+            default: Date.now
+        }
+    },
+    { _id: false }
+);
+
 const loanApplicationSchema = new mongoose.Schema(
     {
         applicationId: {
@@ -48,6 +73,18 @@ const loanApplicationSchema = new mongoose.Schema(
                 "Rejected"
             ],
             default: "Pending"
+        },
+        documents: {
+
+            panCard: documentSchema,
+
+            aadhaarCard: documentSchema,
+
+            salarySlips: [documentSchema],
+
+            bankStatements: [documentSchema],
+
+            otherDocuments: [documentSchema]
         }
     },
     {
