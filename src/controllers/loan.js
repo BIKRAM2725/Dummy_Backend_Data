@@ -59,93 +59,180 @@ async (req, res) => {
     }
 };
 
-const uploadToCloudinary = (fileBuffer, folder, fileName) => {
+const uploadToCloudinary = (file, folder) => {
     return new Promise((resolve, reject) => {
 
         const uploadStream = cloudinary.uploader.upload_stream(
             {
-                folder: folder,
+                folder,
                 resource_type: "auto",
-                public_id: fileName.split(".")[0]
+                public_id: file.originalname.split(".")[0]
             },
             (error, result) => {
-
                 if (error) {
-                    reject(error);
-                } else {
-                    resolve(result);
+                    return reject(error);
                 }
 
+                resolve(result);
             }
         );
 
-        streamifier.createReadStream(fileBuffer).pipe(uploadStream);
+        streamifier
+            .createReadStream(file.buffer)
+            .pipe(uploadStream);
 
     });
 };
 
 export const uploadLoanDocuments = async (req, res) => {
+
     try {
 
         const { applicationId } = req.params;
 
-        console.log("Application ID:", applicationId);
-
-        console.log("Uploaded Files:", req.files);
-
-        const uploadedDocuments = {};
-
-        // PAN Card
-        if (req.files.panCard) {
-
-            const file = req.files.panCard[0];
-
-            console.log(file.originalname);
-
-        }
-
-        // Aadhaar Card
-        if (req.files.aadhaarCard) {
-
-            const file = req.files.aadhaarCard[0];
-
-            console.log(file.originalname);
-
-        }
-
-        // Salary Slips
-        if (req.files.salarySlips) {
-
-            req.files.salarySlips.forEach(file => {
-
-                console.log(file.originalname);
-
-            });
-
-        }
-
-        // Bank Statements
-        if (req.files.bankStatements) {
-
-            req.files.bankStatements.forEach(file => {
-
-                console.log(file.originalname);
-
-            });
-
-        }
-
-        res.status(200).json({
-            success: true,
-            message: "Files received successfully"
+        const loan = await LoanApplication.findOne({
+            applicationId
         });
 
-    } catch (error) {
+        if (!loan) {
 
-        res.status(500).json({
-            success: false,
-            message: error.message
+            return res.status(404).json({
+                success: false,
+                message: "Loan application not found"
+            });
+
+        }
+
+        // ---------------- PAN ----------------
+
+        if (req.files?.panCard?.length) {
+
+            const result = await uploadToCloudinary(
+                req.files.panCard[0],
+                "loan_documents/pan"
+            );
+
+            loan.documents.panCard = {
+            url: result.secure_url,
+            publicId: result.public_id,
+            originalName: req.files.panCard[0].originalname
+            };
+
+        }
+
+        // ---------------- Aadhaar ----------------
+
+        if (req.files?.aadhaarCard?.length) {
+
+            const result = await uploadToCloudinary(
+                req.files.aadhaarCard[0],
+                "loan_documents/aadhaar"
+            );
+
+            loan.documents.aadhaarCard = {
+                url: result.secure_url,
+                publicId: result.public_id,
+                originalName: req.files.aadhaarCard[0].originalname
+            };
+
+        }
+
+        // ---------------- Salary Slips ----------------
+
+        if (req.files?.salarySlips?.length) {
+
+            loan.documents.salarySlips = [];
+
+            for (const file of req.files.salarySlips) {
+
+                const result = await uploadToCloudinary(
+                    file,
+                    "loan_documents/salary_slips"
+                );
+
+                loan.documents.salarySlips.push({
+                url: result.secure_url,
+                publicId: result.public_id,
+                originalName: file.originalname
+                });
+
+            }
+
+        }
+
+        // ---------------- Bank Statements ----------------
+
+        if (req.files?.bankStatements?.length) {
+
+            loan.documents.bankStatements = [];
+
+            for (const file of req.files.bankStatements) {
+
+                const result = await uploadToCloudinary(
+                    file,
+                    "loan_documents/bank_statements"
+                );
+
+                loan.documents.bankStatements.push({
+
+                    url: result.secure_url,
+                    publicId: result.public_id,
+                    originalName: file.originalname
+
+                });
+
+            }
+
+        }
+
+        // ---------------- Other Documents ----------------
+
+        if (req.files?.otherDocuments?.length) {
+
+            loan.documents.otherDocuments = [];
+
+            for (const file of req.files.otherDocuments) {
+
+                const result = await uploadToCloudinary(
+                    file,
+                    "loan_documents/other_documents"
+                );
+
+                loan.documents.otherDocuments.push({
+
+                    url: result.secure_url,
+                    publicId: result.public_id,
+                    originalName: file.originalname
+
+
+                });
+
+            }
+
+        }
+
+        await loan.save();
+
+        return res.status(200).json({
+
+            success: true,
+            message: "Documents uploaded successfully",
+            documents: loan.documents
+
         });
 
     }
+    catch (error) {
+
+        console.error(error);
+
+        return res.status(500).json({
+
+            success: false,
+            message: error.message
+
+        });
+
+    }
+
 };
